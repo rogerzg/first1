@@ -1,0 +1,169 @@
+#include<reg52.h>
+//#define RX1 P0^2 //接收
+ //#define TX1=1 P0^1  //发送
+sbit D1=P1^4;  /*zuo*   左D1高电平倒退 */
+sbit D2=P1^5;  /*zuo*  左D2高电平前进*/
+sbit D3=P1^6;  /*you*   右D3高电平倒退*/
+sbit D4=P1^7;  /*you*   右D4高电平前进*/
+sbit D5=P2^5;  /*使能*/
+sbit D6=P2^6;  /*使能*/
+sbit IN1=P0^0;
+sbit IN2=P0^1;
+sbit IN3=P0^2;
+sbit IN4=P0^3;
+sbit TX1=P1^1;
+sbit RX1=P1^2;
+unsigned char revdbuf;
+ /* unsigned char flag=0;  */
+unsigned int time=0;
+unsigned int S=0;
+
+void delay(unsigned char x)
+{
+unsigned char i;
+	while(x--)
+		for(i=124;i>0;i--);
+} 
+void run()
+{
+	D5=1;
+	D6=1;
+D1=1;
+D2=0;
+D3=0;
+D4=1;	
+}
+
+void tui()
+{
+	D5=1;
+	D6=1;
+D1=0;
+D2=1;
+D3=1;
+D4=0;	
+}
+void left()
+{
+	D5=1;
+	D6=1;
+	D1=0;
+	D2=1;
+	D3=0;
+	D4=1;
+}
+void right()
+{
+	D5=1;
+	D6=1;
+	D1=1;
+	D2=0;
+	D3=1;
+	D4=0;
+}
+void stop()
+{
+	D5=0;
+	D6=0;
+D1=0;
+	D2=0;
+	D3=0;
+	D4=0;
+}
+ void count1()
+{
+	while(!RX1);
+	TR0=1;
+	while(RX1);
+	TR0=0;
+	time=TH0*256+TL0;
+	TH0=0;
+	TL0=0;
+	S=(time*1.7)/100;
+	
+ }
+void zuo()
+{
+left();
+	delay(100);
+	run();	
+}
+void you()
+{
+right();
+	delay(100);
+	run();
+}
+void xunji()
+{
+switch(P0&0x0f)
+	{case 0x00:stop();break;
+	case 0x07:zuo();break;
+	case 0x0e:you();break;
+//	case (0x0b|0x09|0x0d):run();break;
+	default:run();break; 
+}
+	}
+
+void timer0() interrupt 1 //T0中断
+{
+
+} 
+void ser() interrupt 4
+{
+if(RI)
+{
+revdbuf=SBUF;
+	// flag=1;
+	RI=0;
+}
+} 
+
+void init()
+{
+TMOD=0X21;
+TH1=0Xfd;
+TL1=0Xfd;
+TH0=0;
+TL0=0;
+	ET0=1;
+//	ET1=1;
+  TR1=1;
+// TR0=0;
+REN=1;
+SM0=0;
+SM1=1;
+EA=1;
+ES=1; 	
+}
+
+void panduan()
+{
+if(S<20)
+{
+stop();
+}
+else
+{run();}
+} 
+void main()
+{
+ init();
+	while(1)
+	{	TX1=1;
+	  delay(1);
+	  TX1=0;
+		count1(); 
+	switch(revdbuf)
+	{
+case'0':run();break;
+case'3':tui();break;
+case'1':left();break;
+case'2':right();break;
+case'4':stop();break;
+case'5':panduan();break;
+case'6':xunji();break;		
+default:break;		
+}
+}
+}
