@@ -1,0 +1,379 @@
+#include<reg52.h>
+sbit D1=P2^1;    //段选
+sbit D2=P2^0;      //位选
+sbit key_add=P1^0;  //阈值加1键
+sbit key_dec=P1^1;   //阈值减1键
+sbit key_xian=P1^2;   //显示阈值键
+code unsigned char seg7code[]={0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f,0x00,0x40,0x76,0x38}; //不带小数点的共阴段码，含H，L，-,等符号
+code unsigned char seg7codeB[]={0xbf,0x86,0xdb,0xcf,0xe6,0xed,0xfd,0x87,0xff,0xef,0x00};  //带小数的共阴段码
+
+sbit DQ=P3^7;  //数据传输线接单片机的相应的引脚
+unsigned char tempL=0;   //设全局变量
+unsigned char tempH=0;
+unsigned int sdata;//测到的温度的整数部分
+unsigned char xiaoshu1;//小数第一位
+unsigned char xiaoshu2;//小数第二位
+unsigned char xiaoshu;//两位小数
+unsigned int htime=20;  //设阈值初始值为20
+
+bit flag_xian=0;		//=1,阈值显示;=0显示温度
+// unsigned int diskey;
+bit  fg=1;        //温度正负标志
+
+
+
+//******************延时程序 *******************************
+
+//??????????????time=i*8+10,?????2ms???
+
+//************************************************************
+void delay(unsigned char i)
+{
+ for(i;i>0;i--);
+}
+
+
+//***********************************************************
+
+//                     延时程序
+
+//************************************************************
+void delay1ms()
+{
+ unsigned char i;
+ for(i=124;i>0;i--);  //延时1002us
+}
+
+
+
+//*****************************初始化 *********************************//
+
+Init_DS18B20(void) 
+{
+ unsigned char x=0;
+ DQ=1; //DQ??? 
+ delay(8); //???
+ DQ=0; //?????? 
+ delay(80); //??(>480us) 
+ DQ=1; //????? 
+ delay(5); //??(15~60us) 
+ x=DQ; //?X?????????????,18B20????X=0,??X=1 
+ delay(20); 
+} 
+
+
+//**********读一个字节************//
+
+ReadOneChar(void)  //?????????????1us??,??????????,???????
+{
+unsigned char i=0; //?????????????60us,??????????1us?????????
+unsigned char dat=0; 
+for (i=8;i>0;i--) //?????8? 
+{
+ DQ=1; 
+ delay(1); 
+ DQ=0;
+ dat>>=1; 
+ DQ=1; 
+ if(DQ) 
+ dat|=0x80; 
+ delay(4);
+} 
+return(dat);
+} 
+
+
+
+//*********************** **写一个字节**************************//
+
+WriteOneChar(unsigned char dat) 
+{ 
+  unsigned char i=0; //????????????,????????15us??????????????,
+  for(i=8;i>0;i--) //?15~60us??????????,????????1,??0??? 
+  {
+   DQ=0; //?????????????1us?????????? 
+   DQ=dat&0x01; 
+   delay(5); 
+   DQ=1; 
+   dat>>=1;
+  } 
+  delay(4);
+	
+} 
+
+
+//读温度值(低位放tempL;高位放tempH;)
+ReadTemperature(void) 
+{ 
+ Init_DS18B20(); //初始化
+ WriteOneChar(0xcc); //跳过读序列号的操作
+ WriteOneChar(0x44); //启动温度转换
+ delay(125); //延时
+ Init_DS18B20(); //初始化
+ WriteOneChar(0xcc); //跳过读序列号的操作 
+ WriteOneChar(0xbe); //读温度寄存器(???????????????) 
+ tempL=ReadOneChar(); //读出温度的低位LSB
+ tempH=ReadOneChar(); //读出温度的高位MSB 
+  
+		if(tempH>0x7f)      //最高位为1时温度是负的
+		{
+		 tempL=~tempL+1;         //补码转换 取反加1
+		 tempH=~tempH;       
+		 fg=0;      //温度为负时fg=0
+       }
+		sdata = tempL/16+tempH*16;  			 //整数部分
+		xiaoshu1 = (tempL&0x0f)*10/16; //小数第一位
+		xiaoshu2 = (tempL&0x0f)*100/16%10;//小数第二位
+		xiaoshu=xiaoshu1*10+xiaoshu2; //小数两位
+}
+
+
+
+
+
+//********************显示函数****************
+void Led(unsigned int date)
+{ 
+	if(fg==1)  //温度为正数时
+		{
+ 
+      
+	 if(sdata>htime) //测得的温度整数部分大于阈值
+	 {
+		 P0=0x7f;
+		 D2=1;
+		 D2=0;
+		 P0=seg7code[12]; //   在最后面显示字母H
+		 D1=1;
+		 D1=0;
+		 delay(62);
+	   P0=0x00;
+		 
+	 P0=0xfb;    
+	 D2=1;
+	D2=0;
+	 P0=seg7code[date/10];  //十位，输出
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;        //消隐
+	
+	 P0=0xf7;     
+	 D2=1;
+	D2=0;
+	 P0=seg7codeB[date%10];  //个位，输出
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;       //消隐
+	
+	 P0=0xef;     
+	 D2=1;
+	D2=0;
+	 P0=seg7code[xiaoshu1];  //小数点第一位
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;         //消隐
+	
+	 P0=0xdf;     
+	 D2=1;
+	D2=0;
+	 P0=seg7code[xiaoshu2];  //小数点第二位
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;       //消隐
+ }
+ 
+ /*if(sdata=htime)
+		{
+  P0=0xfb;     //P1.0=0,?????
+	 D2=1;
+	D2=0;
+	 P0=seg7code[htime/10];  //???,??,??
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;        //??
+	
+	 P0=0xf7;     //P1.1=0,?????,???
+	 D2=1;
+	D2=0;
+	 P0=seg7code[htime%10];
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;       //??
+}  */
+
+ if(sdata<=htime)    //测得的温度值小于等于阈值
+	 {
+ P0=0xfb;     
+	 D2=1;
+	D2=0;
+	 P0=seg7code[date/10];    //正常显示温度，位码，段码和输出方式同上
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;       
+	
+	 P0=0xf7;    
+	 D2=1;
+	D2=0;
+	 P0=seg7codeB[date%10];
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;       
+	
+	 P0=0xef;     
+	 D2=1;
+	D2=0;
+	 P0=seg7code[xiaoshu1];
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;         
+	
+	 P0=0xdf;   
+	 D2=1;
+	D2=0;
+	 P0=seg7code[xiaoshu2];
+	 D1=1;
+		D1=0;
+	 delay(248);
+	 P0=0x00;  }
+ }
+
+   if(fg==0)  //测得的温度为负数时
+   {
+		P0=0x7f;
+		 D2=1;
+		 D2=0;
+		 P0=seg7code[13];  // 最前面加上负号
+		 D1=1;
+		 D1=0;
+		 delay(248);
+		 P0=0x00; 
+		 
+	 P0=0xfb;     
+		 D2=1;
+	D2=0;    // 位码，段码 和输出方式同上
+		 
+	 P0=seg7code[11];		 
+		 
+		D1=1;
+		D1=0; 
+	 delay(248);
+	 P0=0x00;       
+	
+	 P0=0xf7;    
+	D2=1;
+	D2=0; 
+		   
+	 P0=seg7code[date/10];
+		
+		 D1=1;
+		D1=0; 
+	 delay(248);
+	 P0=0x00;     
+	
+	 P0=0xef;    
+		 D2=1;
+	D2=0;
+	
+	 P0=seg7codeB[date%10];
+	 
+	 D1=1;
+		D1=0; 
+	 delay(248);
+	 P0=0x00;       
+	
+	 P0=0xdf;     
+	 D2=1;
+	D2=0;
+	
+	 P0=seg7code[xiaoshu1];
+	
+	 D1=1;
+		D1=0; 
+	 delay(248);
+	 P0=0x00;      
+   }
+}
+
+ void yu(void)   //阈值函数
+{
+
+ if(fg==1)  //为正数时
+ {
+	if(!key_add)
+	{
+		delay(10);         //延时消抖
+		while(!key_add);
+		{
+			if(htime<99)
+			htime++;    //阈值加1
+		}
+	}
+
+
+		if(!key_dec)
+		{
+		delay(10);
+			while(!key_dec);    //消抖
+			{
+		if(htime>0)
+			htime--;   //阈值减1
+		}
+		}
+
+
+}
+} 
+//**************************** //??? 
+
+
+void main()
+{
+ while(1)
+ {
+	fg=1;
+  ReadTemperature();
+  //Led(sdata);
+	 yu();
+	 if(!key_xian)   //显示阈值程序
+	 {
+			delay(10);              //消抖
+		 if(!key_xian)
+			 //flag_xian = 1;
+		               
+			while(!key_xian);
+				flag_xian = ~flag_xian;
+   
+	}
+	if(flag_xian)
+	{
+		P0=0xfb;    
+				 D2=1;
+				D2=0;
+				 P0=seg7code[htime/10];    //阈值的十位部分，输出
+				 D1=1;
+					D1=0;
+				 delay(248);
+				 P0=0x00;        //消隐
+				
+				 P0=0xf7;     
+				 D2=1;
+				D2=0;
+				 P0=seg7code[htime%10];   //阈值的个位部分，输出
+				 D1=1;
+					D1=0;
+				 delay(248);
+				 P0=0x00;       //消隐
+	}
+	else
+		Led(sdata);
+ }
+}
