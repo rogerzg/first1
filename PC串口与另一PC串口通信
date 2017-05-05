@@ -13,11 +13,11 @@
 
 #define MAX_SEND_BUF_LEN  128
 #define MAX_RECV_BUF_LEN 128
-static uint8 pTxData[MAX_SEND_BUF_LEN];
+static uint8 pTxData[MAX_SEND_BUF_LEN];//无线发送缓冲区大小
 static uint8 pRxData[MAX_RECV_BUF_LEN]; 
 #define MAX_UART_SEND_BUF_LEN  128
 #define MAX_UART_RECV_BUF_LEN  128
-uint8  uTxData[MAX_UART_SEND_BUF_LEN]; 
+uint8  uTxData[MAX_UART_SEND_BUF_LEN]; //串口发送缓冲区大小
 uint8 uRxData[MAX_UART_RECV_BUF_LEN];
 uint16 uTxlen = 0;
 uint16 uRxlen = 0;
