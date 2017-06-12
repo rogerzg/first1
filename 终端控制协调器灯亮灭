@@ -99,11 +99,13 @@ void GenericAPP_MessageMSGCB(afIncomingMSGPacket_t *pkt)
     osal_memcpy(buffer,pkt->cmd.Data,3);
     if(buffer[0]=='1' && buffer[1]=='1' && buffer[2]=='#' )
     {
-      HalLedBlink(HAL_LED_1,4,50,500); 
+      HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);
+      memset(buffer,0,3);
     }
     else
     {
       HalLedSet(HAL_LED_1,HAL_LED_MODE_OFF);
+      memset(buffer,0,3);
     }
     break;
   }
