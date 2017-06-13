@@ -1,0 +1,299 @@
+xietiao.c
+#include "OSAL.h"
+#include "AF.h"
+#include "ZDApp.h"
+#include "ZDObject.h"
+#include "ZDProfile.h"
+#include <string.h>
+//#include "xietiao.h"
+//#include "GenericApp.h"
+#include "xietiao.h"
+#include "DebugTrace.h"
+#include "sensor.h"
+#if !defined( WIN32 )
+  #include "OnBoard.h"
+#endif
+
+/* HAL */
+#include "hal_lcd.h"
+#include "hal_led.h"
+#include "hal_key.h"
+#include "hal_uart.h"
+
+
+// This list should be filled with Application specific Cluster IDs.
+const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
+{
+  GENERICAPP_CLUSTERID
+};//进行簇列表的轮询
+
+const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
+{
+  GENERICAPP_ENDPOINT,              //  int Endpoint;
+  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
+  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
+  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
+  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
+  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
+  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
+  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
+  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
+};
+
+endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
+byte GenericApp_TaskID;//任务优先级定义
+//devStates_t GenericApp_NwkState;
+
+byte GenericApp_TransID;//数据发送序列号
+
+void GenericAPP_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
+void GenericApp_SendTheMessage( void );//数据发送函数
+
+
+void GenericApp_Init( byte task_id )//任务初始化函数
+{
+  halUARTCfg_t uartConfig;//串口初始化
+  GenericApp_TaskID = task_id;//初始化任务优先级
+  GenericApp_TransID = 0;//将发送数据包的序列号初始化
+
+  GenericApp_epDesc.endPoint = GENERICAPP_ENDPOINT;
+  GenericApp_epDesc.task_id = &GenericApp_TaskID;
+  GenericApp_epDesc.simpleDesc
+            = (SimpleDescriptionFormat_t *)&GenericApp_SimpleDesc;
+  GenericApp_epDesc.latencyReq = noLatencyReqs;//对节点描述符进行描述
+
+  afRegister( &GenericApp_epDesc );//使用afRegister函数将节点描述符进行注册
+   uartConfig.configured = TRUE;
+   uartConfig.baudRate = HAL_UART_BR_115200;
+   uartConfig.flowControl = FALSE;
+   uartConfig.callBackFunc = NULL;
+   HalUARTOpen (0,&uartConfig);
+}
+
+
+UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
+{
+  afIncomingMSGPacket_t *MSGpkt;//定义一个指向接收消息结构体的指针
+
+  if ( events & SYS_EVENT_MSG )//对于事件进行判断
+  {
+    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );//从操作系统里面得到接收信息
+    while ( MSGpkt )//为真有消息
+    {
+      switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
+      {
+        case AF_INCOMING_MSG_CMD://接收到的消息进行判断，
+          GenericAPP_MessageMSGCB(MSGpkt);
+          break;
+          default:
+          break;
+          }
+       osal_msg_deallocate( (uint8 *)MSGpkt ); //清空内存 必做
+      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );
+      }
+    return (events ^ SYS_EVENT_MSG);
+    }
+  return 0;
+}
+void GenericAPP_MessageMSGCB(afIncomingMSGPacket_t *pkt)
+{
+  unsigned char buffer[2]={0x0a,0x0d};//换行回车
+  TEMPERATURE temperature;
+  switch(pkt -> clusterId)
+  {
+  case GENERICAPP_CLUSTERID:
+    osal_memcpy(&temperature,pkt->cmd.Data,sizeof(temperature));
+    HalUARTWrite(0,(uint8*)&temperature,sizeof(temperature));
+    HalUARTWrite(0,buffer,2);
+    break;
+  }
+}
+
+zhongduan.c
+#include "OSAL.h"
+#include "AF.h"
+#include "ZDApp.h"
+#include "ZDObject.h"
+#include "ZDProfile.h"
+#include <string.h>
+#include "xietiao.h"
+#include "sensor.h"
+//#include "GenericApp.h"
+
+#include "DebugTrace.h"
+
+#if !defined( WIN32 )
+  #include "OnBoard.h"
+#endif
+
+/* HAL */
+#include "hal_lcd.h"
+#include "hal_led.h"
+#include "hal_key.h"
+#include "hal_uart.h"
+#define SEND_DATA_EVENT 0X01
+
+const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
+{
+  GENERICAPP_CLUSTERID
+};//进行簇列表的轮询
+
+const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
+{
+  GENERICAPP_ENDPOINT,              //  int Endpoint;
+  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
+  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
+  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
+  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
+  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
+  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
+  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
+  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
+};
+endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
+byte GenericApp_TaskID;//任务优先级定义
+byte GenericApp_TransID;//数据发送序列号
+devStates_t GenericApp_NwkState; //保存节点状态的变量
+void GenericAPP_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
+void GenericApp_SendTheMessage( void );//数据发送函数
+
+void GenericApp_Init( byte task_id )//任务初始化函数
+{
+  halUARTCfg_t uartConfig;//串口初始化
+  GenericApp_TaskID = task_id;//初始化任务优先级
+  GenericApp_TransID = 0;//将发送数据包的序列号初始化
+  GenericApp_NwkState =DEV_INIT;//将涉笔初始化为DEV_INIT
+  GenericApp_epDesc.endPoint = GENERICAPP_ENDPOINT;
+  GenericApp_epDesc.task_id = &GenericApp_TaskID;
+  GenericApp_epDesc.simpleDesc
+            = (SimpleDescriptionFormat_t *)&GenericApp_SimpleDesc;
+  GenericApp_epDesc.latencyReq = noLatencyReqs;//对节点描述符进行描述
+
+  afRegister( &GenericApp_epDesc );//使用afRegister函数将节点描述符进行注册
+  uartConfig.configured = TRUE;
+   uartConfig.baudRate = HAL_UART_BR_115200;
+   uartConfig.flowControl = FALSE;
+   uartConfig.callBackFunc = NULL;
+   HalUARTOpen (0,&uartConfig);
+}
+UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
+{
+  afIncomingMSGPacket_t *MSGpkt;//定义一个指向接收消息结构体的指针
+
+  if ( events & SYS_EVENT_MSG )//对于事件进行判断
+  {
+    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );//从操作系统里面得到接收信息
+    while ( MSGpkt )//为真有消息
+    {
+      switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
+      {
+      case ZDO_STATE_CHANGE:
+        GenericApp_NwkState =(devStates_t)(MSGpkt->hdr.status);//读取网络设备状态
+        if(GenericApp_NwkState==DEV_END_DEVICE)
+        {
+        osal_set_event(GenericApp_TaskID,SEND_DATA_EVENT);//设置用户任务的SEND_DATA_EVENT事件
+        }
+        break;
+      default:
+        break;
+      }
+      osal_msg_deallocate( (uint8 *)MSGpkt ); //清空内存 必做
+      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );
+      }
+    return (events ^ SYS_EVENT_MSG);
+  }
+  //事件内容
+  if (events & SEND_DATA_EVENT)//周期性发送
+  {
+  GenericApp_SendTheMessage();
+  osal_start_timerEx(GenericApp_TaskID,SEND_DATA_EVENT,1000);
+  return(events ^ SEND_DATA_EVENT);
+  }
+  return 0;
+}
+void GenericApp_SendTheMessage(void)
+{
+  uint8 tvalue;
+  TEMPERATURE temperature;
+  temperature.BUF.Head = '&';
+  tvalue=readTemp();
+  temperature.BUF.value[0]=tvalue/10+'0';
+   temperature.BUF.value[1]=tvalue%10+'0';
+   temperature.BUF.Tail = 'C';
+afAddrType_t my_DstAddr;
+my_DstAddr.addrMode =(afAddrMode_t)Addr16Bit;//单点寻址
+my_DstAddr.endPoint = GENERICAPP_ENDPOINT; //初始化端口号
+
+my_DstAddr.addr.shortAddr =0x0000;//协调器地址
+AF_DataRequest(&my_DstAddr,&GenericApp_epDesc,GENERICAPP_CLUSTERID,20,
+              (uint8*)&temperature,&GenericApp_TransID,AF_DISCV_ROUTE,AF_DEFAULT_RADIUS);//调用数据发送函数AF_DataRequest进行无线数据发送
+//HalLedBlink(HAL_LED_2,4,20,500);
+}
+
+xietiao.h
+#ifndef xietiao_H
+#define xietiao_H
+
+#include "ZComDef.h"
+
+#define GENERICAPP_ENDPOINT             10
+
+#define GENERICAPP_PROFID               0X0F04
+#define GENERICAPP_DEVICEID             0X0001
+#define GENERICAPP_DEVICE_VERSION       0
+#define GENERICAPP_FLAGS                0
+#define GENERICAPP_MAX_CLUSTERS        1
+#define GENERICAPP_CLUSTERID            1
+typedef union h
+{
+uint8 TEMP[4];
+struct RFRXBUF
+{
+unsigned char Head;
+unsigned char value[2];
+unsigned char Tail;
+}BUF;
+}TEMPERATURE;
+
+extern void GenericApp_Init( byte task_id );
+extern UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events );
+
+#endif
+
+sensor.h
+#ifndef sensor_H
+#define sensor_H
+#include <hal_types.h>
+extern int8 readTemp(void);
+#endif
+
+sensor.c
+#include "sensor.h"
+#include <ioCC2530.h>
+#define HAL_ADC_REF_115V 0X00
+#define HAL_ADC_DEC_256 0X20
+#define HAL_ADC_CHN_TEMP 0X0E
+
+int8 readTemp(void)
+{
+static uint16 reference_voltage;
+static uint16 bCalibrate = TRUE;
+uint16 value;
+int8 temp;
+ATEST =0X01;//使能温度传感器
+TR0=0X01;//连接温度传感器
+ADCIF=0;
+ADCCON3=(HAL_ADC_REF_115V | HAL_ADC_DEC_256 | HAL_ADC_CHN_TEMP);
+while(!ADCIF);
+ADCIF =0;
+value =ADCL;
+value|=((uint16)ADCH)<<8;
+value>>=4;
+if(bCalibrate)//记录第一次读取的温度值，校正温度
+{
+reference_voltage=value;
+bCalibrate=FALSE;
+}
+temp=22+((value-reference_voltage)/4);
+return temp;
+}
