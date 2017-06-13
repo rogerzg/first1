@@ -100,12 +100,18 @@ void GenericAPP_MessageMSGCB(afIncomingMSGPacket_t *pkt)
     if(buffer[0]=='1' && buffer[1]=='1' && buffer[2]=='#' )
     {
       HalLedSet(HAL_LED_1,HAL_LED_MODE_ON);
-      memset(buffer,0,3);
+          for (uint8 i=0;i<=3;i++)   
+  {
+    buffer[i]=(unsigned char) NULL;
+  }
     }
     else
     {
       HalLedSet(HAL_LED_1,HAL_LED_MODE_OFF);
-      memset(buffer,0,3);
+          for (uint8 i=0;i<=3;i++)   
+  {
+    buffer[i]=(unsigned char) NULL;
+  }
     }
     break;
   }
