@@ -198,7 +198,7 @@ void GenericApp_Init( byte task_id )//任务初始化函数
   //halUARTCfg_t uartConfig;//串口初始化
   GenericApp_TaskID = task_id;//初始化任务优先级
   GenericApp_TransID = 0;//将发送数据包的序列号初始化
-
+ GenericApp_NwkState = DEV_INIT;
   GenericApp_epDesc.endPoint = GENERICAPP_ENDPOINT;
   GenericApp_epDesc.task_id = &GenericApp_TaskID;
   GenericApp_epDesc.simpleDesc
