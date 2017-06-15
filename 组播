@@ -263,7 +263,7 @@ void GenericApp_SendTheMessage(void)
 {
 unsigned char *theMessageData ="Router Received!";//数据发送
 afAddrType_t my_DstAddr;
-my_DstAddr.addrMode =(afAddrMode_t)AddrGroup;//广播
+my_DstAddr.addrMode =(afAddrMode_t)Addr16Bit;//广播
 my_DstAddr.endPoint = GENERICAPP_ENDPOINT; //初始化端口号
 
 my_DstAddr.addr.shortAddr =0x0000;
