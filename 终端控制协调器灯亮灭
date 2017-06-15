@@ -46,7 +46,7 @@ byte GenericApp_TaskID;//任务优先级定义
 
 byte GenericApp_TransID;//数据发送序列号
 
-void GenericAPP_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
 void GenericApp_SendTheMessage( void );//数据发送函数
 
 
@@ -78,7 +78,7 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
       switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
       {
         case AF_INCOMING_MSG_CMD://接收到的消息进行判断，
-          GenericAPP_MessageMSGCB(MSGpkt);
+          GenericApp_MessageMSGCB(MSGpkt);
           break;
           default:
           break;
