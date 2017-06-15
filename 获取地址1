@@ -182,7 +182,7 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
       }
     return (events ^ SYS_EVENT_MSG);
     }
-  if(events ^ SHOW_INFO_EVENT)
+  if(events & SHOW_INFO_EVENT)
   {
   ShowInfo();
   osal_start_timerEx(GenericApp_TaskID,SHOW_INFO_EVENT,5000);
