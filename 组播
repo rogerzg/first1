@@ -29,18 +29,18 @@ const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
   GENERICAPP_CLUSTERID
 };//进行簇列表的轮询
 
-const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
-{
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
-};
+const SimpleDescriptionFormat_t GenericApp_SimpleDesc=  
+{  
+  GENERICAPP_ENDPOINT,  
+  GENERICAPP_PROFID,  
+  GENERICAPP_DEVICEID,  
+  GENERICAPP_DEVICE_VERSION,  
+  GENERICAPP_FLAGS,  
+  GENERICAPP_MAX_CLUSTERS,   
+ (cId_t*)GenericApp_ClusterList,   
+  0,  
+  (cId_t *)NULL  
+};  
 
 
 aps_Group_t GenericApp_Group; 
@@ -78,69 +78,73 @@ void GenericApp_Init( byte task_id )//任务初始化函数
    osal_memcpy(&(GenericApp_Group.name[1]),"Group1",6);//使用函数获得数组名
 }
 
-UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
-{
-  afIncomingMSGPacket_t *MSGpkt;//定义一个指向接收消息结构体的指针
-
-  if ( events & SYS_EVENT_MSG )//对于事件进行判断
-  {
-    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );//从操作系统里面得到接收信息
-    while ( MSGpkt )//为真有消息
-    {
-      switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
-      {
-        case AF_INCOMING_MSG_CMD://接收到的消息进行判断，
-          GenericApp_MessageMSGCB(MSGpkt);
-          break;
-      case ZDO_STATE_CHANGE:
-        GenericApp_NwkState=(devStates_t)(MSGpkt->hdr.status);
-        if(GenericApp_NwkState==DEV_ZB_COORD)
-        {
-        aps_AddGroup(GENERICAPP_ENDPOINT,&GenericApp_Group);
-        osal_start_timerEx(GenericApp_TaskID,SEND_TO_ALL_EVENT,5000);
-        }
-        break;
-          default:
-          break;
-          }
-       osal_msg_deallocate( (uint8 *)MSGpkt ); //清空内存 必做
-      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );
-      }
-    return (events ^ SYS_EVENT_MSG);
-    }
-  if(events & SEND_TO_ALL_EVENT)
-  {
-  GenericApp_SendTheMessage();
-  osal_start_timerEx(GenericApp_TaskID,SEND_TO_ALL_EVENT,5000);
-  return(events^SEND_TO_ALL_EVENT);
-  }
-  return 0;
-}
-void GenericApp_MessageMSGCB(afIncomingMSGPacket_t *pkt)
-{
-   char buf[17];
-  unsigned char buffer[2]={0x0a,0x0d};
-  switch(pkt->clusterId)
-  {
-  case GENERICAPP_CLUSTERID:
-    osal_memcpy(buf,pkt->cmd.Data,17);
-    HalUARTWrite(0,buf,17);
-     HalUARTWrite(0,buffer,2);
-    break;
-  }
-}
-void GenericApp_SendTheMessage(void)
-{
-unsigned char *theMessageData ="COOD SEND!";//数据发送
-afAddrType_t my_DstAddr;
-my_DstAddr.addrMode =(afAddrMode_t)AddrGroup;//广播
-my_DstAddr.endPoint = GENERICAPP_ENDPOINT; //初始化端口号
-
-my_DstAddr.addr.shortAddr =GenericApp_Group.ID;
-AF_DataRequest(&my_DstAddr,&GenericApp_epDesc,GENERICAPP_CLUSTERID,100,
-               theMessageData,&GenericApp_TransID,AF_DISCV_ROUTE,AF_DEFAULT_RADIUS);//调用数据发送函数AF_DataRequest进行无线数据发送
-}
-
+UINT16 GenericApp_ProcessEvent(byte task_id,UINT16 events)  
+{  
+  afIncomingMSGPacket_t* MSGpkt;//MSGpkt用于指向接收消息结构体的指针  
+  if(events&SYS_EVENT_MSG)  
+  {  
+     MSGpkt=(afIncomingMSGPacket_t*)osal_msg_receive(GenericApp_TaskID);//osal_msg_receive（）从消息队列上接收消息  
+   while(MSGpkt)  
+   {  
+     switch(MSGpkt->hdr.event)  
+    {  
+    case AF_INCOMING_MSG_CMD:          //接受到新数据的消息的ID是AF_INCOMING_MSG_CMD,这个宏是在协议栈中定义好的值为0x1A  
+                                       //接受到的是新数据事件  
+      //HalLedBlink(HAL_LED_1,0,50,500);    //LED2 闪烁         
+      GenericApp_MessageMSGCB(MSGpkt);//功能是完成对接受数据的处理  
+      break;  
+    case ZDO_STATE_CHANGE:  //建立网络后，设置事件     
+      GenericApp_NwkState=(devStates_t)(MSGpkt->hdr.status);//???????  
+      if(GenericApp_NwkState==DEV_ZB_COORD)//把该节点已初始化为协调器，则执行下面的  
+      {  
+      // HalLedBlink(HAL_LED_2,0,50,500);    //LED2 闪烁   
+       aps_AddGroup(GENERICAPP_ENDPOINT,&GenericApp_Group);  //建立网路后，加入组。  
+       osal_start_timerEx(GenericApp_TaskID,SEND_TO_ALL_EVENT,5000);  
+      }  
+      break;  
+    default:  
+      break;  
+    }  
+    osal_msg_deallocate((uint8 *)MSGpkt);//接收到的消息处理完后，释放消息所占的存储空间  
+    MSGpkt=(afIncomingMSGPacket_t*)osal_msg_receive(GenericApp_TaskID);  
+    //处理完一个消息后，再从消息队列里接受消息，然后对其进行相应处理，直到所有消息处理完  
+   }  
+   return (events ^ SYS_EVENT_MSG);  
+  }  
+  if(events&SEND_TO_ALL_EVENT)//数据发送事件处理代码  
+  {  
+    GenericApp_SendTheMessage();//向终端节点发送数据函数  
+    osal_start_timerEx(GenericApp_TaskID,SEND_TO_ALL_EVENT,5000);  
+    return (events^SEND_TO_ALL_EVENT);      
+  }  
+    return 0;  
+}  
+void GenericApp_MessageMSGCB(afIncomingMSGPacket_t* pkt)  
+{  
+  char buf[20];  
+  unsigned char buffer[2]={0x0A,0x0D};  
+  switch(pkt->clusterId)  
+  {  
+  case GENERICAPP_CLUSTERID:  
+    osal_memcpy(buf,pkt->cmd.Data,20);  
+    HalUARTWrite(0,buf,20);  
+    HalUARTWrite(0,buffer,2);  
+  }    
+}  
+void GenericApp_SendTheMessage(void)  
+{  
+ unsigned char* theMessageData ="Coordinator send!";  
+ afAddrType_t my_DstAddr;  
+// my_DstAddr.addrMode=(afAddrMode_t)AddrBroadcast;  
+  my_DstAddr.addrMode=(afAddrMode_t)AddrGroup;//填的是组播  
+ my_DstAddr.endPoint=GENERICAPP_ENDPOINT;  
+// my_DstAddr.addr.shortAddr=0xFFFF;  
+  my_DstAddr.addr.shortAddr=GenericApp_Group.ID;//网络地址填的是组ID   
+ AF_DataRequest(&my_DstAddr,&GenericApp_epDesc,GENERICAPP_CLUSTERID,  
+   osal_strlen(theMessageData)+1,theMessageData,
+     &GenericApp_TransID,AF_DISCV_ROUTE,AF_DEFAULT_RADIUS);   
+ HalLedSet(HAL_LED_2,HAL_LED_MODE_TOGGLE);
+}  
 router.c
 #include "OSAL.h"
 #include "AF.h"
@@ -164,6 +168,7 @@ router.c
 #include "hal_uart.h"
 #include "OSAL_Nv.h"
 #include "aps_groups.h"
+#include "sensor.h"
 #define SEND_DATA_EVENT 0X01
 
 const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
@@ -171,18 +176,18 @@ const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
   GENERICAPP_CLUSTERID
 };//进行簇列表的轮询
 
-const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
-{
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
-};
+const SimpleDescriptionFormat_t GenericApp_SimpleDesc=  
+{  
+  GENERICAPP_ENDPOINT,  
+  GENERICAPP_PROFID,  
+  GENERICAPP_DEVICEID,  
+  GENERICAPP_DEVICE_VERSION,  
+  GENERICAPP_FLAGS,  
+  0,  
+  (cId_t*)NULL,  
+  GENERICAPP_MAX_CLUSTERS,  
+  (cId_t*)GenericApp_ClusterList    
+};  
 aps_Group_t GenericApp_Group; 
 endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
 byte GenericApp_TaskID;//任务优先级定义
@@ -190,7 +195,7 @@ devStates_t GenericApp_NwkState;
 
 byte GenericApp_TransID;//数据发送序列号
 
-void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t* pckt );//消息处理函数
 void GenericApp_SendTheMessage( void );//数据发送函数
 
 void GenericApp_Init( byte task_id )//任务初始化函数
@@ -212,62 +217,72 @@ void GenericApp_Init( byte task_id )//任务初始化函数
    osal_memcpy(&(GenericApp_Group.name[1]),"Group1",6);//使用函数获得数组名
 }
 
-UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
-{
-  afIncomingMSGPacket_t *MSGpkt;//定义一个指向接收消息结构体的指针
+UINT16 GenericApp_ProcessEvent(byte task_id,UINT16 events)  
+{  
+  afIncomingMSGPacket_t* MSGpkt;  
+  if(events&SYS_EVENT_MSG)  
+  {  
+    MSGpkt=(afIncomingMSGPacket_t*)osal_msg_receive(GenericApp_TaskID);      
+    while(MSGpkt)  
+    {  
+      switch(MSGpkt->hdr.event)  
+      {  
+      case  AF_INCOMING_MSG_CMD:  
+        GenericApp_MessageMSGCB(MSGpkt);  
+        break;  
+    case ZDO_STATE_CHANGE:   //加入网络后，加入族中  
+      GenericApp_NwkState=(devStates_t)(MSGpkt->hdr.status);//读取节点的设备类型  
+   //   if(GenericApp_NwkState==DEV_END_DEVICE)  
+      if(GenericApp_NwkState==DEV_ROUTER)  
+      {  
+        aps_AddGroup(GENERICAPP_ENDPOINT,&GenericApp_Group); //加入组中  
+        //当中断节点加入网络后使用osal_set_envent()函数设置SEND_DATA_EVENT事件，当事件发生时，执行事件处理函数  
+      //  osal_set_event(GenericApp_TaskID,SEND_DATA_EVENT);//??????????????????????????  
+        //GenericApp_SendTheMessage(); //终端节点类型，执行无线数据发送  
+      }  
+      break;  
+    default:  
+      break;  
+      }  
+    osal_msg_deallocate((uint8*)MSGpkt);  
+    MSGpkt=(afIncomingMSGPacket_t*)osal_msg_receive(GenericApp_TaskID);  
+    }  
+    return (events^SYS_EVENT_MSG);  
+  }  
+  return 0;  
+}  
 
-  if ( events & SYS_EVENT_MSG )//对于事件进行判断
-  {
-    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );//从操作系统里面得到接收信息
-    while ( MSGpkt )//为真有消息
-    {
-      switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
-      {
-        case AF_INCOMING_MSG_CMD://接收到的消息进行判断，
-          GenericApp_MessageMSGCB(MSGpkt);
-          break;
-      case ZDO_STATE_CHANGE:
-        GenericApp_NwkState=(devStates_t)(MSGpkt->hdr.status);
-        if(GenericApp_NwkState == DEV_ROUTER)
-        {
-        aps_AddGroup(GENERICAPP_ENDPOINT,&GenericApp_Group);
-        }
-        break;
-          default:
-          break;
-          }
-       osal_msg_deallocate( (uint8 *)MSGpkt ); //清空内存 必做
-      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );
-      }
-    return (events ^ SYS_EVENT_MSG);
-    }
-  return 0;
-}
-
-void GenericApp_MessageMSGCB(afIncomingMSGPacket_t *pkt)
-{
-   char buf[18];
-  //unsigned char buffer[2]={0x0a,0x0d};
-  switch(pkt->clusterId)
-  {
-  case GENERICAPP_CLUSTERID:
-    osal_memcpy(buf,pkt->cmd.Data,osal_strlen("COOD SEND!")+1);
-    if(osal_memcmp(buf,"COOD SEND!",osal_strlen("COOD SEND!")+1))
-    {
-    GenericApp_SendTheMessage();
-    }
-    break;
-  }
-}
-void GenericApp_SendTheMessage(void)
-{
-unsigned char *theMessageData ="Router Received!";//数据发送
-afAddrType_t my_DstAddr;
-my_DstAddr.addrMode =(afAddrMode_t)Addr16Bit;//广播
-my_DstAddr.endPoint = GENERICAPP_ENDPOINT; //初始化端口号
-
-my_DstAddr.addr.shortAddr =0x0000;
-AF_DataRequest(&my_DstAddr,&GenericApp_epDesc,GENERICAPP_CLUSTERID,100,
-               theMessageData,&GenericApp_TransID,AF_DISCV_ROUTE,AF_DEFAULT_RADIUS);//调用数据发送函数AF_DataRequest进行无线数据发送
-HalLedSet(HAL_LED_2,HAL_LED_MODE_TOGGLE);
-}
+void GenericApp_MessageMSGCB(afIncomingMSGPacket_t *pkt)  
+{  
+ char* recvbuf;  
+ switch(pkt->clusterId)  
+ {  
+ case GENERICAPP_CLUSTERID:  
+    //HalLedBlink(HAL_LED_1,0,50,500);    //LED2 闪烁   
+   osal_memcpy(recvbuf,pkt->cmd.Data,osal_strlen("Coordinator send!")+1);  
+   if(osal_memcmp(recvbuf,"Coordinator send!",osal_strlen("Coordinator send!")+1))  
+   {  
+    //HalLedBlink(HAL_LED_2,0,50,500);    //LED2 闪烁   
+    GenericApp_SendTheMessage();   
+   }  
+   else  
+   {  
+     //other  
+     ;  
+   }  
+   break;  
+ }  
+}  
+void GenericApp_SendTheMessage(void)  
+{  
+  unsigned char *theMessageData="Router received!";//存放发送数据  
+    
+  afAddrType_t my_DstAddr;      
+  my_DstAddr.addrMode=(afAddrMode_t)Addr16Bit;//数据发送模式：可选 单播、广播、多播方式  这里选Addr16Bit表单播  
+  my_DstAddr.endPoint=GENERICAPP_ENDPOINT;   //初始化端口函  
+  my_DstAddr.addr.shortAddr=0x0000;  //标志目的地址节点的网络地址  这里是协调器的地址    
+  //下面是数据发送                            
+ AF_DataRequest(&my_DstAddr,&GenericApp_epDesc,GENERICAPP_CLUSTERID, 
+ osal_strlen(theMessageData)+1,theMessageData,&GenericApp_TransID,AF_DISCV_ROUTE,AF_DEFAULT_RADIUS);  
+// HalLedSet(HAL_LED_2,HAL_LED_MODE_TOGGLE);  
+}  
