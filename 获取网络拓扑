@@ -20,44 +20,35 @@ xietiao.c
 #include "hal_key.h"
 #include "hal_uart.h"
 #include "OSAL_Nv.h"
-//#include "aps_groups.h"
+#include "aps_groups.h"
 
-//#define SEND_TO_ALL_EVENT 0X01
 // This list should be filled with Application specific Cluster IDs.
 const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
 {
   GENERICAPP_CLUSTERID
 };//进行簇列表的轮询
 
-const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
-{
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
-};
-
-
-//aps_Group_t GenericApp_Group; 
-endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
-byte GenericApp_TaskID;//任务优先级定义
-devStates_t GenericApp_NwkState;
-
-byte GenericApp_TransID;//数据发送序列号
-RFTX nodeinfo[3];
-uint8 nodenum=0;
-void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
-void GenericApp_SendTheMessage( void );//数据发送函数
-static void rxCB(uint8 port,uint8 event);
-
+const SimpleDescriptionFormat_t GenericApp_SimpleDesc=  
+{  
+  GENERICAPP_ENDPOINT,  
+  GENERICAPP_PROFID,  
+  GENERICAPP_DEVICEID,  
+  GENERICAPP_DEVICE_VERSION,  
+  GENERICAPP_FLAGS,  
+  GENERICAPP_MAX_CLUSTERS,   
+ (cId_t*)GenericApp_ClusterList,   
+  0,  
+  (cId_t *)NULL  
+};  
+devStates_t GenericApp_NwkState; 
+endPointDesc_t GenericApp_epDesc;//节点描述符  
+byte GenericApp_TaskID;//任务优先级  
+byte GenericApp_TransID;//数据发送序列号。  
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );//处理事件
+static void rxCB(uint8 port,uint8 envent);  
 void GenericApp_Init( byte task_id )//任务初始化函数
 {
-  halUARTCfg_t uartConfig;//串口初始化
+  //halUARTCfg_t uartConfig;//串口初始化
   GenericApp_TaskID = task_id;//初始化任务优先级
   GenericApp_TransID = 0;//将发送数据包的序列号初始化
 
@@ -68,68 +59,79 @@ void GenericApp_Init( byte task_id )//任务初始化函数
   GenericApp_epDesc.latencyReq = noLatencyReqs;//对节点描述符进行描述
 
   afRegister( &GenericApp_epDesc );//使用afRegister函数将节点描述符进行注册
- uartConfig.configured = TRUE;
-   uartConfig.baudRate = HAL_UART_BR_115200;
-   uartConfig.flowControl = FALSE;
-   uartConfig.callBackFunc = NULL;
-   HalUARTOpen (0,&uartConfig);
+    halUARTCfg_t uartConfig;  
+  uartConfig.configured =TRUE;  
+  uartConfig.baudRate   =HAL_UART_BR_115200;  
+  uartConfig.flowControl=FALSE;  
+  uartConfig.callBackFunc=rxCB;  
+  HalUARTOpen(0,&uartConfig); 
 }
 
-UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
-{
-  afIncomingMSGPacket_t *MSGpkt;//定义一个指向接收消息结构体的指针
+UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )  
+{  
+  afIncomingMSGPacket_t *MSGpkt;  
+   //HalLedBlink(HAL_LED_1,0,50,500);  
+  if ( events & SYS_EVENT_MSG )  
+  {  
+    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );  
+    while ( MSGpkt )  
+    {  
+      switch ( MSGpkt->hdr.event )  
+      {  
+         case AF_INCOMING_MSG_CMD:  //天线接收到数据  
+          //HalLedBlink(HAL_LED_2,0,50,500);  
+          GenericApp_MessageMSGCB( MSGpkt );   //接收数据并把数据发送到UART  
+         break;           
+        default:  
+          break;  
+      }  
+      // Release the memory  
+      osal_msg_deallocate( (uint8 *)MSGpkt );  
+      // Next  
+      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );  
+    }  
+    // return unprocessed events  
+    return (events ^ SYS_EVENT_MSG);  
+  }  
+  return 0;  
+}   
+RFTX rftx;
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )  
+{  
+  switch ( pkt->clusterId )  
+  {  
+    case GENERICAPP_CLUSTERID:  
+    osal_memcpy(&rftx,pkt->cmd.Data,sizeof(rftx));  
+    //不使用rxCB时，放在这里，尽然只输出一行结果  
+ /* uint8 changeline[2]={0x0A,0x0D}; 
+  HalUARTWrite(0,"Type: ",osal_strlen("Type:")); 
+  HalUARTWrite(0,rftx.type,3); 
+  HalUARTWrite(0,"  NWK:",osal_strlen("  NWK:")); //刚才用了sizeof("  NWK:") 
+  HalUARTWrite(0,rftx.myNWK,sizeof(rftx.myNWK));         ////刚才用了sizeof(rftx.myNWk),是不能正确显示的 
+  HalUARTWrite(0,"  pNWK:",osal_strlen("  pNWK:")); 
+  HalUARTWrite(0,rftx.pNWK,sizeof(rftx.pNWK));   
+  HalUARTWrite(0,changeline,2);*/        
+      break;  
+  }  
+}  
 
-  if ( events & SYS_EVENT_MSG )//对于事件进行判断
-  {
-    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );//从操作系统里面得到接收信息
-    while ( MSGpkt )//为真有消息
-    {
-      switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
-      {
-        case AF_INCOMING_MSG_CMD://接收到的消息进行判断，
-          GenericApp_MessageMSGCB(MSGpkt);
-          break;
-          default:
-          break;
-          }
-       osal_msg_deallocate( (uint8 *)MSGpkt ); //清空内存 必做
-      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );
-      }
-    return (events ^ SYS_EVENT_MSG);
-    }
-  return 0;
-}
-void GenericApp_MessageMSGCB(afIncomingMSGPacket_t *pkt)
-{
-switch (pkt->clusterId)
-{
-case GENERICAPP_CLUSTERID:
-  osal_memcpy(&nodeinfo[nodenum++],pkt->cmd.Data,11);
-  break;
-}
-}
-static void rxCB(uint8 port,uint8 event)
-{
-  unsigned char changeline[2]={0x0a,0x0d};
-  uint8 buf[8];
-  uint8 uartbuf[16];
-  uint8 i=0;
-  HalUARTRead(0,buf,8);
-  if(osal_memcmp(buf,"topology",8))
-  {
-  for(i=0;i<3;i++)
-  {
-  HalUARTWrite(0,nodeinfo[i].type,3);
-  HalUARTWrite(0,"NWK:",6);
-  HalUARTWrite(0,nodeinfo[i].myNWK,4);
-  HalUARTWrite(0,"pNWK:",7);
-  HalUARTWrite(0,nodeinfo[i].pNWK,4);
-  HalUARTWrite(0,changeline,2);
-  }
-  }
-}
-
-router.c
+static void rxCB(uint8 port,uint8 envent)  
+{  
+  uint8 changeline[2]={0x0A,0x0D};  
+  uint8 buf[8];  
+  HalUARTRead(0,buf,8);  
+  if(osal_memcmp(buf,"topology",8))  
+  {  
+  HalUARTWrite(0,"Type: ",osal_strlen("Type:"));  
+  HalUARTWrite(0,rftx.type,3);  
+  HalUARTWrite(0,"  NWK:",osal_strlen("  NWK:")); //刚才用了sizeof("  NWK:")  
+  HalUARTWrite(0,rftx.myNWK,sizeof(rftx.myNWK));         ////刚才用了sizeof(rftx.myNWk),是不能正确显示的  
+  HalUARTWrite(0,"  pNWK:",osal_strlen("  pNWK:"));  
+  HalUARTWrite(0,rftx.pNWK,sizeof(rftx.pNWK));  
+  HalUARTWrite(0,changeline,2);   
+  }  
+}  
+zhongduan.c或者router.c
 #include "OSAL.h"
 #include "AF.h"
 #include "ZDApp.h"
@@ -140,7 +142,6 @@ router.c
 //#include "GenericApp.h"
 #include "xietiao.h"
 #include "DebugTrace.h"
-#include <stdlib.h>
 
 #if !defined( WIN32 )
   #include "OnBoard.h"
@@ -153,42 +154,40 @@ router.c
 #include "hal_uart.h"
 #include "OSAL_Nv.h"
 #include "aps_groups.h"
-#define SEND_DATA_EVENT 0X01
+#include "sensor.h"
+#define SEND_DATA_EVENT 0x01
 
 const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
 {
   GENERICAPP_CLUSTERID
 };//进行簇列表的轮询
 
-const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
-{
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
-};
-//aps_Group_t GenericApp_Group; 
-endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
-byte GenericApp_TaskID;//任务优先级定义
-devStates_t GenericApp_NwkState;
-
-byte GenericApp_TransID;//数据发送序列号
-
-void SendInfo(void);
-void To_string(uint8 *dest,char *src,uint8 length);
-
-
+const SimpleDescriptionFormat_t GenericApp_SimpleDesc=  
+{  
+  GENERICAPP_ENDPOINT,  
+  GENERICAPP_PROFID,  
+  GENERICAPP_DEVICEID,  
+  GENERICAPP_DEVICE_VERSION,  
+  GENERICAPP_FLAGS,  
+  0,  
+  (cId_t*)NULL,  
+  GENERICAPP_MAX_CLUSTERS,  
+  (cId_t*)GenericApp_ClusterList    
+};  
+endPointDesc_t GenericApp_epDesc;//节点描述符  
+byte GenericApp_TaskID;          //任务优先级  
+byte GenericApp_TransID;         //数据发送序列号  
+devStates_t GenericApp_NwkState;//保存节点状态  
+  
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );  
+void GenericApp_SendTheMessage( void ); 
+void To_string(uint8 *dest,char* src,uint8 length);//二进制书转化为十六进制数    
 void GenericApp_Init( byte task_id )//任务初始化函数
 {
- // halUARTCfg_t uartConfig;//串口初始化
+  
   GenericApp_TaskID = task_id;//初始化任务优先级
   GenericApp_TransID = 0;//将发送数据包的序列号初始化
-  GenericApp_NwkState = DEV_INIT;
+ GenericApp_NwkState = DEV_INIT;
   GenericApp_epDesc.endPoint = GENERICAPP_ENDPOINT;
   GenericApp_epDesc.task_id = &GenericApp_TaskID;
   GenericApp_epDesc.simpleDesc
@@ -196,112 +195,97 @@ void GenericApp_Init( byte task_id )//任务初始化函数
   GenericApp_epDesc.latencyReq = noLatencyReqs;//对节点描述符进行描述
 
   afRegister( &GenericApp_epDesc );//使用afRegister函数将节点描述符进行注册
-  
-  
 }
 
-UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
-{
-  afIncomingMSGPacket_t *MSGpkt;//定义一个指向接收消息结构体的指针
-  if ( events & SYS_EVENT_MSG )//对于事件进行判断
-  {
-    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );//从操作系统里面得到接收信息
-    while ( MSGpkt )//为真有消息
-    {
-      switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
-      {      
-      case ZDO_STATE_CHANGE:
-        GenericApp_NwkState=(devStates_t)(MSGpkt->hdr.status);
-        if(GenericApp_NwkState == DEV_ROUTER)
-        {
-        osal_set_event(GenericApp_TaskID,SEND_DATA_EVENT);
-        }
-        break;
-          default:
-          break;
-          }
-       osal_msg_deallocate( (uint8 *)MSGpkt ); //清空内存 必做
-      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );
-      }
-    return (events ^ SYS_EVENT_MSG);
-    }
-  if(events & SEND_DATA_EVENT)
-  {
-  SendInfo();
-  //osal_start_timerEx(GenericApp_TaskID,SHOW_INFO_EVENT,5000);
-  return (events ^ SEND_DATA_EVENT);
-  }
-  return 0;
-}
-void SendInfo()
-{
-RFTX rftx;
-uint16 nwk;
-if(GenericApp_NwkState ==DEV_ROUTER)
-{
-osal_memcpy(rftx.type,"ROU",3);
-}
-nwk = NLME_GetShortAddr();
-To_string(rftx.myNWK,(uint8 *)&nwk,2);
-
-nwk=NLME_GetCoordShortAddr();
-To_string(rftx.pNWK,(uint8 *)&nwk,2);
-
-afAddrType_t my_DstAddr;
-my_DstAddr.addrMode =(afAddrMode_t)Addr16Bit;
-my_DstAddr.endPoint = GENERICAPP_ENDPOINT; //初始化端口号
-
-my_DstAddr.addr.shortAddr =0x0000;//协调器地址
-AF_DataRequest(&my_DstAddr,&GenericApp_epDesc,GENERICAPP_CLUSTERID,11,
-               (uint8 *)&rftx,&GenericApp_TransID,AF_DISCV_ROUTE,AF_DEFAULT_RADIUS);//调用数据发送函数AF_DataRequest进行无线数据发送
-}
-void To_string(uint8 *dest,char *src,uint8 length)
-{
-uint8 *xad;
-uint8 i=0;
-uint8 ch;
-xad =src +length -1;
-for (i=0;i<length;i++,xad--)
-{
-ch = (*xad >>4)&0x0f;
-dest[i<<1] =ch+ ((ch<10)? '0':'7');
-ch =*xad & 0x0f;
-dest[(i<<1)+1]=ch + ((ch<10)?'0':'7');
-}
-}
+UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )  
+{  
+  afIncomingMSGPacket_t *MSGpkt;  
+  if ( events & SYS_EVENT_MSG )  
+  {  
+    MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );  
+    while ( MSGpkt )  
+    {  
+      switch ( MSGpkt->hdr.event )  
+      {          
+        case ZDO_STATE_CHANGE:  
+          GenericApp_NwkState = (devStates_t)(MSGpkt->hdr.status);  
+          if ( (GenericApp_NwkState == DEV_ROUTER)  
+              || (GenericApp_NwkState == DEV_END_DEVICE) )  
+          {  
+            osal_set_event(GenericApp_TaskID,SEND_DATA_EVENT);  
+          }  
+          break;  
+        default:  
+          break;  
+      }  
+      // Release the memory  
+      osal_msg_deallocate( (uint8 *)MSGpkt );  
+      // Next  
+      MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive( GenericApp_TaskID );  
+    }  
+    // return unprocessed events  
+    return (events ^ SYS_EVENT_MSG);  
+  }  
+   if ( events &  SEND_DATA_EVENT )  
+  {  
+    //这里添加获取自己和父节点的NWK地址  
  
- xietiao.h
- #ifndef xietiao_H
-#define xietiao_H
-
-#include "ZComDef.h"
-
-#define GENERICAPP_ENDPOINT             10
-
-#define GENERICAPP_PROFID               0X0F04
-#define GENERICAPP_DEVICEID             0X0001
-#define GENERICAPP_DEVICE_VERSION       0
-#define GENERICAPP_FLAGS                0
-#define GENERICAPP_MAX_CLUSTERS        1
-#define GENERICAPP_CLUSTERID            1
-typedef union h
-{
-uint8 TEMP[4];
-struct RFRXBUF
-{
-unsigned char Head;
-unsigned char value[2];
-unsigned char Tail;
-}BUF;
-}TEMPERATURE;
-
-typedef struct RFTXBUF
-{
-uint8 type[3];
-uint8 myNWK[4];
-uint8 pNWK[4];
-}RFTX;
-extern void GenericApp_Init( byte task_id );
-extern UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events );
-
-#endif
+    // Send "the" message  
+    GenericApp_SendTheMessage();  //AF发送  
+         osal_start_timerEx( GenericApp_TaskID,  
+                        SEND_DATA_EVENT,    //事件  
+                           5000 );//定时时间  
+    return (events ^ SEND_DATA_EVENT);  
+  }  
+  // Discard unknown events  
+  return 0;  
+}  
+    
+ RFTX rftx;  
+void GenericApp_SendTheMessage( void )//AF发送  
+{  
+uint16 nwk;  
+if (GenericApp_NwkState == DEV_ROUTER)  
+      osal_memcpy(rftx.type,"ROU",3);  
+else if(GenericApp_NwkState == DEV_END_DEVICE)   
+      osal_memcpy(rftx.type,"DEV",3);  
+nwk=NLME_GetShortAddr();  
+To_string(rftx.myNWK,(uint8*)&nwk,2);  
+nwk=NLME_GetCoordShortAddr();  
+To_string(rftx.pNWK,(uint8*)&nwk,2);    
+//下面是串口输出，尽然不管用，不是没有配置串口和打开串口的原因。到底是哪里出了问题呢？？？  
+uint8 changeline[2]={0x0A,0x0D};  
+HalUARTWrite(0,"Type: ",osal_strlen("Type:"));  
+HalUARTWrite(0,rftx.type,3);  
+HalUARTWrite(0,"  NWK:",osal_strlen("  NWK:")); //刚才用了sizeof("  NWK:")  
+HalUARTWrite(0,rftx.myNWK,sizeof(rftx.myNWK));         ////刚才用了sizeof(rftx.myNWk),是不能正确显示的  
+HalUARTWrite(0,"  pNWK:",osal_strlen("  pNWK:"));  
+HalUARTWrite(0,rftx.pNWK,sizeof(rftx.pNWK));  
+HalUARTWrite(0,changeline,2);     
+afAddrType_t my_DstAddr;                       //  
+my_DstAddr.addrMode=(afAddrMode_t)Addr16Bit;  
+my_DstAddr.endPoint=GENERICAPP_ENDPOINT;  
+my_DstAddr.addr.shortAddr=0x0000;  
+  AF_DataRequest(&my_DstAddr, &GenericApp_epDesc,  
+                     GENERICAPP_CLUSTERID,  
+                   11,//  sizeof(rftx),  
+                      (uint8 *)&rftx,  
+                     &GenericApp_TransID,  
+                     AF_DISCV_ROUTE, AF_DEFAULT_RADIUS );  
+ 
+}
+  
+void To_string(uint8 *dest,char* src,uint8 length)//二进制书转化为十六进制数  
+{  
+  uint8* xad;  
+  uint8 i=0;  
+  uint8 ch;  
+  xad=src+length-1;  
+  for(i=0;i<length;i++,xad--)  
+  {  
+   ch=(*xad>>4)&0x0F;  //除以十六  
+   dest[i<<1]=ch+((ch<10)?'0':'7');  
+   ch=*xad&0x0F;  
+   dest[(i<<1)+1]=ch+((ch<10)?'0':'7');  
+  }  
+}  
