@@ -311,3 +311,151 @@ void To_string(uint8 *dest,char* src,uint8 length)//二进制书转化为十六�
    dest[(i<<1)+1]=ch+((ch<10)?'0':'7');  
   }  
 }  
+
+xietiao.h
+#ifndef xietiao_H
+#define xietiao_H
+
+#include "ZComDef.h"
+
+#define GENERICAPP_ENDPOINT             10
+
+#define GENERICAPP_PROFID               0X0F04
+#define GENERICAPP_DEVICEID             0X0001
+#define GENERICAPP_DEVICE_VERSION       0
+#define GENERICAPP_FLAGS                0
+#define GENERICAPP_MAX_CLUSTERS        1
+#define GENERICAPP_CLUSTERID            1
+/*typedef union h
+{
+uint8 TEMP[4];
+struct RFRXBUF
+{
+unsigned char Head;
+unsigned char value[2];
+unsigned char Tail;
+}BUF;
+}TEMPERATURE; */
+
+/*typedef struct RFTXBUF
+{
+ uint8 myNWK[4];
+ uint8 myMAC[16];
+ uint8 pNWK[4];
+ uint8 pMAC[16]; 
+}RFTX;*/
+
+/*typedef struct rftx{  
+   uint8 type[3];  
+   uint8 myNWK[4];  
+   uint8 pNWK[4];  
+  }RFTX;  */
+
+typedef union h  
+{  
+ unsigned char databuf[18];  
+ struct RFRXBUF  
+ {  
+  unsigned char head[2];  //  "&&"  
+  unsigned char type[3];  //  "ROU"或 "END"  
+  unsigned char myNWK[4]; //  自身的网络地址  
+  unsigned char pNWK[4];  //  父节点的网络地址  
+  unsigned char value[4];  // value[0]表采集数据的类型  如：W表温度  V表电压 后面几位表数值  
+  unsigned char tail;     //"&"  
+ }BUF;  
+}RFTX;  
+
+extern void GenericApp_Init( byte task_id );
+extern UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events );
+
+#endif
+
+sensor.h
+#ifndef sensor_H
+#define sensor_H
+#include <hal_types.h>
+//extern uint16 getvol(void);
+extern int8 readTemp(void);  
+extern unsigned int getVddvalue(void); 
+#endif
+
+sensor.c
+#include "sensor.h"
+#include <ioCC2530.h>
+#define ADC_REF_115V 0x00  
+#define ADC_DEC_256  0x20  
+#define ADC_CHN_TEMP 0x0e  
+#define ADC_DEC_064      0x00  
+#define ADC_CHN_VDD3     0x0f  
+
+/*uint16 getvol(void)
+{
+uint32 value;
+    APCFG  |=1;   
+        P0SEL  |= (1 << (0));	
+        P0DIR  &= ~(1 << (0)); // ADC初始化
+   ADCIF = 0;   //清ADC 中断标志
+   //采用基准电压avdd5:3.3V，通道0，启动AD转化
+   ADCCON3 = (0x80 | 0x10 | 0x00);//10010000
+   while ( !ADCIF )
+   {
+       ;  //等待AD转化结束
+   }
+   value = ADCH;
+   value = value<< 8;
+   value |= ADCL;
+  // AD值转化成电压值
+  // 0 表示 0V ，32768 表示 3.3V
+  // 电压值 = (value*3.3)/32768 （V)
+  value = (value * 330);
+  value = value >> 15;   // 除以32768
+  // 返回分辨率为0.01V的电压值
+  return (uint16)value;
+} */   //片外电压
+int8 readTemp(void)  
+{  
+ static uint16 reference_voltage;  
+ static uint8  bCalibrate=TRUE;  
+   
+ unsigned char tmpADCCON3=ADCCON3;//????????  
+ uint16 value;  
+ int8 temp;  
+  
+ ATEST=0x01;  //使能温度传感器  
+ TR0|=0x01;   //连接温度传感器  
+ ADCIF=0;     //?????  
+  
+ ADCCON3=(ADC_REF_115V|ADC_DEC_256|ADC_CHN_TEMP);//???????  
+   
+ while(!ADCIF)//???????  
+   ;  
+ ADCIF=0;  
+   
+ value=ADCL;                   //这里应该是取低位  
+ value |=((uint16)ADCH)<<8;   //这里应该是取高位  
+   
+ value>>=4;//除以16？？？  
+   
+ if(bCalibrate)//记录第一次读取的温度值，用于校正温度数据  
+ {  
+   reference_voltage=value;  
+   bCalibrate=FALSE;     
+ }  
+   
+ temp=22+((value-reference_voltage)/4);//温度校正函数  
+ return temp;  
+   
+}  
+  
+unsigned int getVddvalue(void)  
+{  
+ unsigned int value;  
+ unsigned char tmpADCCON3=ADCCON3;  
+ ADCIF=0;  
+ ADCCON3=(ADC_REF_115V|ADC_DEC_064|ADC_CHN_VDD3);  
+ while(!ADCIF)  
+   ;  
+ value=ADCH;  
+ ADCCON3=tmpADCCON3;  
+ return (value);  
+}  
