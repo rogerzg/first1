@@ -255,13 +255,7 @@ nwk=NLME_GetCoordShortAddr();
 To_string(rftx.pNWK,(uint8*)&nwk,2);    
 //下面是串口输出，尽然不管用，不是没有配置串口和打开串口的原因。到底是哪里出了问题呢？？？  
 uint8 changeline[2]={0x0A,0x0D};  
-HalUARTWrite(0,"Type: ",osal_strlen("Type:"));  
-HalUARTWrite(0,rftx.type,3);  
-HalUARTWrite(0,"  NWK:",osal_strlen("  NWK:")); //刚才用了sizeof("  NWK:")  
-HalUARTWrite(0,rftx.myNWK,sizeof(rftx.myNWK));         ////刚才用了sizeof(rftx.myNWk),是不能正确显示的  
-HalUARTWrite(0,"  pNWK:",osal_strlen("  pNWK:"));  
-HalUARTWrite(0,rftx.pNWK,sizeof(rftx.pNWK));  
-HalUARTWrite(0,changeline,2);     
+
 afAddrType_t my_DstAddr;                       //  
 my_DstAddr.addrMode=(afAddrMode_t)Addr16Bit;  
 my_DstAddr.endPoint=GENERICAPP_ENDPOINT;  
