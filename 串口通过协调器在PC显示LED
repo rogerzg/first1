@@ -32,15 +32,15 @@ const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
 
 const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
 {
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
+  GENERICAPP_ENDPOINT,  
+  GENERICAPP_PROFID,  
+  GENERICAPP_DEVICEID,  
+  GENERICAPP_DEVICE_VERSION,  
+  GENERICAPP_FLAGS,  
+  0,  
+  (cId_t*)NULL,  
+  GENERICAPP_MAX_CLUSTERS,  
+  (cId_t*)GenericApp_ClusterList
 };
 
 endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
@@ -49,7 +49,7 @@ byte GenericApp_TaskID;//任务优先级定义
 
 byte GenericApp_TransID;//数据发送序列号
 
-void GenericAPP_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
 void GenericApp_SendTheMessage( void );//数据发送函数
 
 
@@ -67,7 +67,7 @@ void GenericApp_Init( byte task_id )//任务初始化函数
 
   afRegister( &GenericApp_epDesc );//使用afRegister函数将节点描述符进行注册
   uartConfig.configured = TRUE;
-   uartConfig.baudRate = HAL_UART_BR_57600;
+   uartConfig.baudRate = HAL_UART_BR_115200;
    uartConfig.flowControl = FALSE;
    uartConfig.callBackFunc = NULL;
    HalUARTOpen (0,&uartConfig);
@@ -85,7 +85,7 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
       switch ( MSGpkt->hdr.event )//MSGpkt指向hdr.event事件
       {
         case AF_INCOMING_MSG_CMD://接收到的消息进行判断，
-          GenericAPP_MessageMSGCB(MSGpkt);
+          GenericApp_MessageMSGCB(MSGpkt);
           break;
           default:
           break;
@@ -97,7 +97,7 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
     }
   return 0;
 }
-void GenericAPP_MessageMSGCB(afIncomingMSGPacket_t *pkt)
+void GenericApp_MessageMSGCB(afIncomingMSGPacket_t *pkt)
 {
   unsigned char buffer[10];
   switch(pkt->clusterId)
@@ -108,7 +108,6 @@ void GenericAPP_MessageMSGCB(afIncomingMSGPacket_t *pkt)
     break;
   }
 }
-
 
 zhongduan.c
 #include "OSAL.h"
@@ -140,21 +139,21 @@ const cId_t GenericApp_ClusterList[GENERICAPP_MAX_CLUSTERS] =
 
 const SimpleDescriptionFormat_t GenericApp_SimpleDesc =//对zigbee设备进行描述
 {
-  GENERICAPP_ENDPOINT,              //  int Endpoint;
-  GENERICAPP_PROFID,                //  uint16 AppProfId[2];
-  GENERICAPP_DEVICEID,              //  uint16 AppDeviceId[2];
-  GENERICAPP_DEVICE_VERSION,        //  int   AppDevVer:4;
-  GENERICAPP_FLAGS,                 //  int   AppFlags:4;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList,  //  byte *pAppInClusterList;
-  GENERICAPP_MAX_CLUSTERS,          //  byte  AppNumInClusters;
-  (cId_t *)GenericApp_ClusterList   //  byte *pAppInClusterList;
+  GENERICAPP_ENDPOINT,  
+  GENERICAPP_PROFID,  
+  GENERICAPP_DEVICEID,  
+  GENERICAPP_DEVICE_VERSION,  
+  GENERICAPP_FLAGS,  
+  0,  
+  (cId_t*)NULL,  
+  GENERICAPP_MAX_CLUSTERS,  
+  (cId_t*)GenericApp_ClusterList
 };
 endPointDesc_t GenericApp_epDesc;//对于一个节点描述符
 byte GenericApp_TaskID;//任务优先级定义
 byte GenericApp_TransID;//数据发送序列号
 devStates_t GenericApp_NwkState; //保存节点状态的变量
-void GenericAPP_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
+void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pckt );//消息处理函数
 void GenericApp_SendTheMessage( void );//数据发送函数
 
 void GenericApp_Init( byte task_id )//任务初始化函数
