@@ -90,7 +90,7 @@ UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events )
     }
   return 0;
 }
-void GenericAPP_MessageMSGCB(afIncomingMSGPacket_t *pkt)
+void GenericApp_MessageMSGCB(afIncomingMSGPacket_t *pkt)
 {
   unsigned char buffer[4];
   switch(pkt->clusterId)
