@@ -1,5 +1,4 @@
 xietiao.c
-
 #include "OSAL.h"
 #include "AF.h"
 #include "ZDApp.h"
@@ -113,7 +112,6 @@ void GenericApp_MessageMSGCB( afIncomingMSGPacket_t *pkt )
   }  
 }  
 xietiao.h
-
 #ifndef xietiao_H
 #define xietiao_H
 
@@ -170,8 +168,7 @@ extern void GenericApp_Init( byte task_id );
 extern UINT16 GenericApp_ProcessEvent( byte task_id, UINT16 events );
 
 #endif
-
-zhongduan.c或者route.c
+route.c或者zhongduan.c
 #include "OSAL.h"
 #include "AF.h"
 #include "ZDApp.h"
@@ -404,6 +401,207 @@ void To_string(uint8 *dest,char* src,uint8 length)//二进制书转化为十六�
    dest[(i<<1)+1]=ch+((ch<10)?'0':'7');  
   }  
 }  
+
+osal
+/**************************************************************************************************
+  Filename:       OSAL_GenericApp.c
+  Revised:        $Date: 2008-02-07 12:10:00 -0800 (Thu, 07 Feb 2008) $
+  Revision:       $Revision: 16360 $
+
+  Description:    This file contains all the settings and other functions
+                  that the user should set and change.
+
+
+  Copyright 2004-2007 Texas Instruments Incorporated. All rights reserved.
+
+  IMPORTANT: Your use of this Software is limited to those specific rights
+  granted under the terms of a software license agreement between the user
+  who downloaded the software, his/her employer (which must be your employer)
+  and Texas Instruments Incorporated (the "License").  You may not use this
+  Software unless you agree to abide by the terms of the License. The License
+  limits your use, and you acknowledge, that the Software may not be modified,
+  copied or distributed unless embedded on a Texas Instruments microcontroller
+  or used solely and exclusively in conjunction with a Texas Instruments radio
+  frequency transceiver, which is integrated into your product.  Other than for
+  the foregoing purpose, you may not use, reproduce, copy, prepare derivative
+  works of, modify, distribute, perform, display or sell this Software and/or
+  its documentation for any purpose.
+
+  YOU FURTHER ACKNOWLEDGE AND AGREE THAT THE SOFTWARE AND DOCUMENTATION ARE
+  PROVIDED 揂S IS?WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED,
+  INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY, TITLE,
+  NON-INFRINGEMENT AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT SHALL
+  TEXAS INSTRUMENTS OR ITS LICENSORS BE LIABLE OR OBLIGATED UNDER CONTRACT,
+  NEGLIGENCE, STRICT LIABILITY, CONTRIBUTION, BREACH OF WARRANTY, OR OTHER
+  LEGAL EQUITABLE THEORY ANY DIRECT OR INDIRECT DAMAGES OR EXPENSES
+  INCLUDING BUT NOT LIMITED TO ANY INCIDENTAL, SPECIAL, INDIRECT, PUNITIVE
+  OR CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA, COST OF PROCUREMENT
+  OF SUBSTITUTE GOODS, TECHNOLOGY, SERVICES, OR ANY CLAIMS BY THIRD PARTIES
+  (INCLUDING BUT NOT LIMITED TO ANY DEFENSE THEREOF), OR OTHER SIMILAR COSTS.
+
+  Should you have any questions regarding your right to use this Software,
+  contact Texas Instruments Incorporated at www.TI.com.
+**************************************************************************************************/
+
+/*********************************************************************
+ * INCLUDES
+ */
+
+#include "ZComDef.h"
+#include "hal_drivers.h"
+#include "OSAL.h"
+#include "OSAL_Tasks.h"
+
+#if defined ( MT_TASK )
+  #include "MT.h"
+  #include "MT_TASK.h"
+#endif
+
+#include "nwk.h"
+#include "APS.h"
+#include "ZDApp.h"
+#if defined ( ZIGBEE_FREQ_AGILITY ) || defined ( ZIGBEE_PANID_CONFLICT )
+  #include "ZDNwkMgr.h"
+#endif
+#if defined ( ZIGBEE_FRAGMENTATION )
+  #include "aps_frag.h"
+#endif
+
+//#include "GenericApp.h"
+#include "xietiao.h"
+
+/*********************************************************************
+ * GLOBAL VARIABLES
+ */
+
+// The order in this table must be identical to the task initialization calls below in osalInitTask.
+const pTaskEventHandlerFn tasksArr[] = {
+  macEventLoop,
+  nwk_event_loop,
+  Hal_ProcessEvent,
+#if defined( MT_TASK )
+  MT_ProcessEvent,
+#endif
+  APS_event_loop,
+#if defined ( ZIGBEE_FRAGMENTATION )
+  APSF_ProcessEvent,
+#endif
+  ZDApp_event_loop,
+#if defined ( ZIGBEE_FREQ_AGILITY ) || defined ( ZIGBEE_PANID_CONFLICT )
+  ZDNwkMgr_event_loop,
+#endif
+  GenericApp_ProcessEvent
+};
+
+const uint8 tasksCnt = sizeof( tasksArr ) / sizeof( tasksArr[0] );
+uint16 *tasksEvents;
+
+/*********************************************************************
+ * FUNCTIONS
+ *********************************************************************/
+
+/*********************************************************************
+ * @fn      osalInitTasks
+ *
+ * @brief   This function invokes the initialization function for each task.
+ *
+ * @param   void
+ *
+ * @return  none
+ */
+void osalInitTasks( void )
+{
+  uint8 taskID = 0;
+
+  tasksEvents = (uint16 *)osal_mem_alloc( sizeof( uint16 ) * tasksCnt);
+  osal_memset( tasksEvents, 0, (sizeof( uint16 ) * tasksCnt));
+
+  macTaskInit( taskID++ );
+  nwk_init( taskID++ );
+  Hal_Init( taskID++ );
+#if defined( MT_TASK )
+  MT_TaskInit( taskID++ );
+#endif
+  APS_Init( taskID++ );
+#if defined ( ZIGBEE_FRAGMENTATION )
+  APSF_Init( taskID++ );
+#endif
+  ZDApp_Init( taskID++ );
+#if defined ( ZIGBEE_FREQ_AGILITY ) || defined ( ZIGBEE_PANID_CONFLICT )
+  ZDNwkMgr_Init( taskID++ );
+#endif
+  GenericApp_Init( taskID );
+}
+
+/*********************************************************************
+*********************************************************************/
+sensor.c
+#include "sensor.h"
+#include <ioCC2530.h>
+//#include "sh10.h"
+#define ADC_REF_115V 0x00  
+#define ADC_DEC_256  0x20  
+#define ADC_CHN_TEMP 0x0e  
+#define ADC_DEC_064      0x00  
+#define ADC_CHN_VDD3     0x0f  
+
+uint16 getvol(void)
+{
+uint32 value;
+    APCFG  |=1;   
+        P0SEL  |= (1 << (0));	
+        P0DIR  &= ~(1 << (0)); // ADC初始化
+   ADCIF = 0;   //清ADC 中断标志
+   //采用基准电压avdd5:3.3V，通道0，启动AD转化
+   ADCCON3 = (0x80 | 0x10 | 0x00);//10010000
+   while ( !ADCIF )
+   {
+       ;  //等待AD转化结束
+   }
+   value = ADCH;
+   value = value<< 8;
+   value |= ADCL;
+  // AD值转化成电压值
+  // 0 表示 0V ，32768 表示 3.3V
+  // 电压值 = (value*3.3)/32768 （V)
+  value = (value * 330);
+  value = value >> 15;   // 除以32768
+  // 返回分辨率为0.01V的电压值
+  return (uint16)value;
+}    //片外电压
+int8 readTemp(void)  
+{  
+ unsigned int sensor_tem,sensor_val;
+call_sht11( &sensor_tem, &sensor_val);
+ int8 temp;  
+temp=(sensor_tem/10); 
+ return temp;  
+   
+}  
+  
+unsigned int getVddvalue(void)  
+{  
+ unsigned int value;  
+ unsigned int sensor_tem,sensor_val;
+  call_sht11( &sensor_tem, &sensor_val);
+  value=(sensor_val/10);
+ return (value);  
+}  
+uint8 get_swsensor(void)
+{
+    P0SEL &= ~( 1 <<1);  //设置p0.1为普通i/o口
+    P0DIR &= ~( 1 <<1);  //设置p0.1为输入口
+    return P0_1;         //返回p0.1电平
+}
+sensor.h
+#ifndef sensor_H
+#define sensor_H
+#include <hal_types.h>
+extern uint16 getvol(void);
+extern int8 readTemp(void);  
+extern unsigned int getVddvalue(void); 
+#endif
+
 sh10.c
 /**************************************************************************************************
   Filename:      sh10.c
@@ -432,7 +630,7 @@ sh10.c
 #define MCU_IO_GET(port, pin)          MCU_IO_GET_PREP(port, pin)
 #define MCU_IO_GET_PREP(port, pin)          (P##port## & BM(pin))
 
-
+typedef unsigned short uint16;
 #if defined (BOARD_OLD)
 /***********旧板IO设置********************/
 #define HAL_BOARD_IO_SHT_SCK_PORT           2
@@ -719,173 +917,3 @@ sh10.h
 extern  void call_sht11(unsigned int *tem, unsigned int *hum); 
 extern  void connectionreset(void);
 #endif
-
-sensor.c
-#include "sensor.h"
-#include <ioCC2530.h>
-#include "sh10.h"
-#define ADC_REF_115V 0x00  
-#define ADC_DEC_256  0x20  
-#define ADC_CHN_TEMP 0x0e  
-#define ADC_DEC_064      0x00  
-#define ADC_CHN_VDD3     0x0f  
-
-uint16 getvol(void)
-{
-uint32 value;
-    APCFG  |=1;   
-        P0SEL  |= (1 << (0));	
-        P0DIR  &= ~(1 << (0)); // ADC初始化
-   ADCIF = 0;   //清ADC 中断标志
-   //采用基准电压avdd5:3.3V，通道0，启动AD转化
-   ADCCON3 = (0x80 | 0x10 | 0x00);//10010000
-   while ( !ADCIF )
-   {
-       ;  //等待AD转化结束
-   }
-   value = ADCH;
-   value = value<< 8;
-   value |= ADCL;
-  // AD值转化成电压值
-  // 0 表示 0V ，32768 表示 3.3V
-  // 电压值 = (value*3.3)/32768 （V)
-  value = (value * 330);
-  value = value >> 15;   // 除以32768
-  // 返回分辨率为0.01V的电压值
-  return (uint16)value;
-}    //片外电压
-
-int8 readTemp(void)  
-{  
-unsigned int sensor_tem,sensor_val;
-call_sht11( &sensor_tem, &sensor_val);
- int8 temp;  
-temp=(sensor_tem/10); 
- return temp;  
-   
-}  
-  
-unsigned int getVddvalue(void)  
-{  
- unsigned int value;  
- unsigned int sensor_tem,sensor_val;
-  call_sht11( &sensor_tem, &sensor_val);
-  value=(sensor_val/10);
- return (value);  
-}  
-sensor.h
-
-#ifndef sensor_H
-#define sensor_H
-#include <hal_types.h>
-extern uint16 getvol(void);
-extern int8 readTemp(void);  
-extern unsigned int getVddvalue(void); 
-#endif
-
-hal_defs.h
-//-------------------------------------------------------------------
-// Filename: hal_defs.h
-// Description: HAL defines
-//-------------------------------------------------------------------
-//-------------------------------------------------------------------
-// INCLUDES
-//-------------------------------------------------------------------
-#include <ioCC2530.h>
-
-//-------------------------------------------------------------------
-// TYPEDEFS
-//-------------------------------------------------------------------
-typedef signed char int8;
-typedef unsigned char uint8;
-
-typedef signed short int16;
-typedef unsigned short uint16;
-
-typedef signed long int32;
-typedef unsigned long uint32;
-
-typedef void(*ISR_FUNC_PTR)(void);
-typedef void(*VFPTR)(void);
-
-//-------------------------------------------------------------------
-// CONSTANTS AND DEFINES
-//-------------------------------------------------------------------
-#define TRUE 1
-#define FALSE 0
-#define NULL (void *)0
-
-#define SUCCESS 0
-#define FAILED  1
-
-//-------------------------------------------------------------------
-// MACROS
-//-------------------------------------------------------------------
-#define BV(n)      (1 << (n))
-
-#define BM(n)      (1 << (n))
-
-#define BF(x,b,s)  (((x) & (b)) >> (s))
-
-#define MIN(n,m)   (((n) < (m)) ? (n) : (m))
-
-#define MAX(n,m)   (((n) < (m)) ? (m) : (n))
-
-#define ABS(n)     (((n) < 0) ? -(n) : (n))
-
-// uint32 processing 
-#define BREAK_UINT32( var, ByteNum ) (uint8)((uint32)(((var) >>((ByteNum) * 8)) & 0x00FF))
-#define BUILD_UINT32(Byte0, Byte1, Byte2, Byte3) ((uint32)((uint32)((Byte0) & 0x00FF) + ((uint32)((Byte1) & 0x00FF) << 8) + ((uint32)((Byte2) & 0x00FF) << 16) + ((uint32)((Byte3) & 0x00FF) << 24)))
-
-#define HI_UINT32(a) ((uint16) (((uint32)(a)) >> 16))
-#define LO_UINT32(a) ((uint16) ((uint32)(a)))
-
-// uint16 processing 
-#define BUILD_UINT16(loByte, hiByte) ((uint16)(((loByte) & 0x00FF) + (((hiByte) & 0x00FF) << 8)))
-
-#define HI_UINT16(a) (((uint16)(a) >> 8) & 0xFF)
-#define LO_UINT16(a) ((uint16)(a) & 0xFF)
-
-// uint16 processing 
-#define BUILD_UINT8(hiByte, loByte) ((uint8)(((loByte) & 0x0F) + (((hiByte) & 0x0F) << 4)))
-
-#define HI_UINT8(a) (((uint8)(a) >> 4) & 0x0F)
-#define LO_UINT8(a) ((uint8)(a) & 0x0F)
-
-//-------------------------------------------------------------------
-//  This macro is for use by other macros to form a fully valid C statement.
-//  Without this, the if/else conditionals could show unexpected behavior.
-//
-//  For example, use...
-//    #define SET_REGS()  st( ioreg1 = 0; ioreg2 = 0; )
-//  instead of ...
-//    #define SET_REGS()  { ioreg1 = 0; ioreg2 = 0; }
-//  or
-//    #define  SET_REGS()    ioreg1 = 0; ioreg2 = 0;
-//  The last macro would not behave as expected in the if/else construct.
-//  The second to last macro will cause a compiler error in certain uses
-//  of if/else construct
-//
-//  It is not necessary, or recommended, to use this macro where there is
-//  already a valid C statement.  For example, the following is redundant...
-//    #define CALL_FUNC()   st(  func();  )
-//  This should simply be...
-//    #define CALL_FUNC()   func()
-//
-// (The while condition below evaluates false without generating a
-//  constant-controlling-loop type of warning on most compilers.)
-//-------------------------------------------------------------------
-#define st(x)      do { x } while (__LINE__ == -1)
-
-//-------------------------------------------------------------------
-// Compiler abstraction
-//-------------------------------------------------------------------
-#define _PRAGMA(x) _Pragma(#x)
-
-#define FAR
-#define NOP()  asm("NOP")
-
-#define HAL_MCU_LITTLE_ENDIAN()  __LITTLE_ENDIAN__
-#define HAL_ISR_FUNC_DECLARATION(f,v) _PRAGMA(vector=v) __near_func __interrupt void f(void)
-#define HAL_ISR_FUNC_PROTOTYPE(f,v) _PRAGMA(vector=v) __near_func __interrupt void f(void)
-#define HAL_ISR_FUNCTION(f,v) HAL_ISR_FUNC_PROTOTYPE(f,v); HAL_ISR_FUNC_DECLARATION(f,v)
