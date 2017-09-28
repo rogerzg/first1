@@ -1,0 +1,73 @@
+#include<ioCC2530.h>
+#include<string.h>
+#define LED1 P1_0
+#define DATABUFF_SIZE 256 //数据缓冲区大小
+unsigned char buff[DATABUFF_SIZE]; //数据缓冲区
+unsigned int uIndex=0; //数据缓冲区的下标
+
+void UART0SendByte(unsigned char *str,int len)
+{
+  int j;
+  for(j=0;j<len;j++)
+  {
+  U0DBUF = *str++;
+  while(UTX0IF==0);
+  UTX0IF = 0;
+}
+}
+void initUART0(void)
+{
+PERCFG=0X00; //位置1 P0口
+P0SEL=0X3C; //p0.2,p0.3,p0.4,p0.5 作为片内外设IO
+U0BAUD = 216; 
+U0GCR=10;
+CLKCONCMD &=0X80; //时钟速度设置为32MHZ
+U0CSR |=0x80; //UART模式
+U0UCR |=0X80; //进行USART清除。并设置数据格式为默认值
+URX0IF=0; //清零UART0 RX中断标志
+UTX0IF=0;//清零UART0TX中断标志
+U0CSR |=0X40; //允许接受
+URX0IE=1; //使能UART0 RX中断
+EA=1;
+}
+
+
+void receive_handler(void)
+{
+unsigned char c;
+c=U0DBUF; //读取接收到的字节
+buff[uIndex]=c;
+if(c=='#'|| uIndex>=DATABUFF_SIZE-1)
+{
+LED1=1;//发送状态指示
+      U0CSR &=~0X40;//USART0 接收禁止
+      UART0SendByte(buff,uIndex);//发送字符串
+      UART0SendByte("\n",sizeof("\n"));//发送换行符
+      U0CSR |=0X40;//USART0 接收使能
+      //rxtxflag=1;//恢复到接收状态
+      uIndex=0;
+      LED1=0;//关发送指示
+}
+else 
+{
+uIndex++; //累计接收到的字节计数加1
+}
+
+}
+
+#pragma vector=URX0_VECTOR
+__interrupt void URX0_ISR(void)
+{
+URX0IF=0; //清中断标志
+receive_handler(); //调用接受数据后处理函数
+}
+void main(void)
+{
+P1DIR |= 0X01;
+LED1=0;
+initUART0(); //UART0初始化
+U0CSR |=0X40;//USART0 接收使能
+IEN0 |=0X04;//usart0 接收中断使能
+EA=1;//开总中断
+while(1);
+} 
